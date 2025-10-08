@@ -1,0 +1,8 @@
+[
+  { "key": "cashier", "en": "Cashier", "ru": "Кассир", "es": "Cajero" },
+  { "key": "deli_clerk", "en": "Deli Clerk", "ru": "Продавец гастронома", "es": "Empleado de charcutería" },
+  { "key": "stoker", "en": "Stoker", "ru": "Сторож", "es": "Fogonero" },
+  { "key": "store_manager", "en": "Store Manager", "ru": "Менеджер магазина", "es": "Gerente de tienda" },
+  { "key": "bakery_associate", "en": "Bakery Associate", "ru": "Пекарь", "es": "Empleado de panadería" },
+  { "key": "kitchen_staff", "en": "Kitchen Staff", "ru": "Кухонный персонал", "es": "Personal de cocina" }
+]
