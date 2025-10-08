@@ -177,6 +177,7 @@ bot.on("message", async (msg) => {
   const chatId = msg.chat.id;
   const raw = msg.text;
   let s = sessions[chatId];
+  console.log(raw);
 
   if (!s) {
     sessions[chatId] = { step: "chooseLang" };
