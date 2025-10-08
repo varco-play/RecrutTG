@@ -74,7 +74,7 @@ const translations = {
     no: "❌ No",
     confirm: "📋 Please confirm your application:",
     confirmBtn: "✅ Confirm and Submit",
-    applied: "🎉 Your application has been sent!/Follow our chanel",
+    applied: "🎉 Your application has been sent!\n\nFollow our chanel",
     invalidOption: "⚠️ Please select an option from the menu.",
     driverOptions: ["✅ Yes", "❌ No"],
     NY: "New York",
