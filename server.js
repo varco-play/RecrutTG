@@ -1,37 +1,35 @@
-// index.js (emails commented out)
 import TelegramBot from "node-telegram-bot-api";
 import express from "express";
 import dotenv from "dotenv";
 import fs from "fs";
-// import nodemailer from "nodemailer"; // <-- email temporarily disabled
+import nodemailer from "nodemailer"; 
 dotenv.config();
 
 const {
   BOT_TOKEN,
   MANAGER_CHAT_ID,
-  // MANAGER_EMAIL,
-  // GMAIL_USER,
-  // GMAIL_PASS,
+  MANAGER_EMAIL,
+  GMAIL_USER,
+  GMAIL_PASS,
   PORT,
 } = process.env;
 if (!BOT_TOKEN || !MANAGER_CHAT_ID) {
   throw new Error("❌ BOT_TOKEN and MANAGER_CHAT_ID must be set in env");
 }
 
-// // If you want emails: ensure MANAGER_EMAIL, GMAIL_USER and GMAIL_PASS are set
-// const emailEnabled = !!(MANAGER_EMAIL && GMAIL_USER && GMAIL_PASS);
+const emailEnabled = !!(MANAGER_EMAIL && GMAIL_USER && GMAIL_PASS);
 
-// // Create nodemailer transporter (Gmail via App Password)
-// let transporter = null;
-// if (emailEnabled) {
-//   transporter = nodemailer.createTransport({
-//     service: "gmail",
-//     auth: {
-//       user: GMAIL_USER,
-//       pass: GMAIL_PASS, // should be an App Password
-//     },
-//   });
-// }
+// Create nodemailer transporter (Gmail via App Password)
+let transporter = null;
+if (emailEnabled) {
+  transporter = nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+      user: GMAIL_USER,
+      pass: GMAIL_PASS, // should be an App Password
+    },
+  });
+}
 
 const MANAGER_ID = MANAGER_CHAT_ID;
 const bot = new TelegramBot(BOT_TOKEN, { polling: true });
@@ -153,10 +151,7 @@ const langKeyboard = {
 };
 
 const mainMenuKeyboard = (lang) => ({
-  keyboard: [
-    [t(lang, "vacancies")],
-    [t(lang, "changeLang")],
-  ],
+  keyboard: [[t(lang, "vacancies")], [t(lang, "changeLang")]],
   resize_keyboard: true,
 });
 
@@ -408,24 +403,24 @@ bot.on("message", async (msg) => {
       // Send to Telegram manager (existing behavior)
       await bot.sendMessage(MANAGER_ID, managerMsg);
 
-      // // Send email to manager (optional, if configured)
-      // if (emailEnabled && transporter) {
-      //   try {
-      //     const mailOptions = {
-      //       from: `"NoReply" <${GMAIL_USER}>`,
-      //       to: MANAGER_EMAIL,
-      //       subject: `New Application — ${s.name}`,
-      //       text: managerMsg,
-      //       html: `<pre>${managerMsg.replace(/</g, "&lt;")}</pre>`,
-      //     };
-      //     await transporter.sendMail(mailOptions);
-      //     console.log("Email sent to manager");
-      //   } catch (err) {
-      //     console.error("Failed to send email:", err);
-      //   }
-      // }
+      // Send email to manager (optional, if configured)
+      if (emailEnabled && transporter) {
+        try {
+          const mailOptions = {
+            from: `"NoReply" <${GMAIL_USER}>`,
+            to: MANAGER_EMAIL,
+            subject: `New Application — ${s.name}`,
+            text: managerMsg,
+            html: `<pre>${managerMsg.replace(/</g, "&lt;")}</pre>`,
+          };
+          await transporter.sendMail(mailOptions);
+          console.log("Email sent to manager");
+        } catch (err) {
+          console.error("Failed to send email:", err);
+        }
+      }
 
-      const CHANNEL_LINK = ""; // <- add your channel link here
+      const CHANNEL_LINK = "https://t.me/GIGINVESTR"; // <- add your channel link here
       const finalMsg = `${t(lang, "applied")}
 ${CHANNEL_LINK ? `\n🔔 Join our channel for updates: ${CHANNEL_LINK}` : ""}`;
 
