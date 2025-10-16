@@ -6,18 +6,29 @@ import nodemailer from "nodemailer";
 
 dotenv.config();
 
-const { BOT_TOKEN, MANAGER_CHAT_ID, MANAGER_EMAIL, GMAIL_USER, GMAIL_PASS, PORT } = process.env;
+const {
+  BOT_TOKEN,
+  MANAGER_CHAT_ID,
+  MANAGER_EMAIL,
+  SENDGRID_USER,
+  SENDGRID_PASS,
+  PORT,
+} = process.env;
 
-if (!BOT_TOKEN || !MANAGER_CHAT_ID || !GMAIL_USER || !GMAIL_PASS) {
-  throw new Error("❌ BOT_TOKEN, MANAGER_CHAT_ID, GMAIL_USER, and GMAIL_PASS must be set in .env");
+if (!BOT_TOKEN || !MANAGER_CHAT_ID || !SENDGRID_USER || !SENDGRID_PASS) {
+  throw new Error(
+    "❌ BOT_TOKEN, MANAGER_CHAT_ID, SENDGRID_USER, and SENDGRID_PASS must be set in .env"
+  );
 }
 
-// Create transporter
+// Create SendGrid transporter
 const transporter = nodemailer.createTransport({
-  service: "gmail",
+  host: "smtp.sendgrid.net",
+  port: 587,
+  secure: false, // TLS
   auth: {
-    user: GMAIL_USER,
-    pass: GMAIL_PASS,
+    user: SENDGRID_USER, // should literally be "apikey"
+    pass: SENDGRID_PASS, // your SendGrid API key
   },
 });
 
@@ -34,10 +45,10 @@ try {
   console.warn("⚠️ vacancies.json not found, starting with empty list");
 }
 
-// Sessions
+// In-memory sessions
 const sessions = {};
 
-// Languages
+// Translations
 const translations = {
   en: {
     chooseLang: "🌐 Choose your language:",
@@ -62,13 +73,17 @@ const translations = {
     applied: "🎉 Application sent! Check your Telegram for updates.",
     invalidOption: "⚠️ Please select a valid option.",
   },
-  // Add 'ru' and 'es' similarly
+  // You can add 'ru' and 'es' similarly
 };
 
 const t = (lang, key) => (translations[lang] && translations[lang][key]) || key;
 
 // Keyboards
-const makeKeyboard = (buttons) => ({ keyboard: buttons, resize_keyboard: true, one_time_keyboard: true });
+const makeKeyboard = (buttons) => ({
+  keyboard: buttons,
+  resize_keyboard: true,
+  one_time_keyboard: true,
+});
 const langKeyboard = makeKeyboard([["English"], ["Русский"], ["Español"]]);
 
 // Telegram Bot
@@ -87,7 +102,7 @@ New application:
 🚗 Driver: ${data.driver}`;
 
   const mailOptions = {
-    from: `"NoReply" <${GMAIL_USER}>`,
+    from: `"NoReply" <no-reply@example.com>`,
     to: MANAGER_EMAIL,
     subject: `New Application — ${data.name}`,
     text: msg,
@@ -118,21 +133,29 @@ bot.on("message", async (msg) => {
 
   // Language selection
   if (s.step === "chooseLang") {
-    if (["English", "Русский", "Español"].includes(text)) s.lang = text === "English" ? "en" : text === "Русский" ? "ru" : "es";
+    if (["English", "Русский", "Español"].includes(text))
+      s.lang = text === "English" ? "en" : text === "Русский" ? "ru" : "es";
     else return bot.sendMessage(chatId, "⚠️ Please select a language:", langKeyboard);
 
     s.step = "main";
-    return bot.sendMessage(chatId, t(s.lang, "mainMenu"), makeKeyboard([[t(s.lang, "vacancies")], [t(s.lang, "changeLang")]]));
+    return bot.sendMessage(
+      chatId,
+      t(s.lang, "mainMenu"),
+      makeKeyboard([[t(s.lang, "vacancies")], [t(s.lang, "changeLang")]])
+    );
   }
 
   const lang = s.lang || "en";
 
   // Main menu
   if (s.step === "main") {
-    if (text === t(lang, "changeLang")) { s.step = "chooseLang"; return bot.sendMessage(chatId, t(lang, "chooseLang"), langKeyboard); }
+    if (text === t(lang, "changeLang")) {
+      s.step = "chooseLang";
+      return bot.sendMessage(chatId, t(lang, "chooseLang"), langKeyboard);
+    }
     if (text === t(lang, "vacancies")) {
       s.step = "chooseVacancy";
-      const buttons = vacancies.map(v => [v[lang] || v.en || "Vacancy"]);
+      const buttons = vacancies.map((v) => [v[lang] || v.en || "Vacancy"]);
       buttons.push([t(lang, "back")]);
       return bot.sendMessage(chatId, "💼 Choose a vacancy:", makeKeyboard(buttons));
     }
@@ -140,7 +163,7 @@ bot.on("message", async (msg) => {
 
   // Vacancy selection
   if (s.step === "chooseVacancy") {
-    const vac = vacancies.find(v => v[lang] === text || v.en === text);
+    const vac = vacancies.find((v) => v[lang] === text || v.en === text);
     if (!vac) return bot.sendMessage(chatId, t(lang, "invalidOption"));
     s.vacancy = vac[lang] || vac.en;
     s.step = "askName";
@@ -154,11 +177,18 @@ bot.on("message", async (msg) => {
     askExperience: "askState",
     askState: "askCityZip",
     askCityZip: "askDriver",
-    askDriver: "confirm"
+    askDriver: "confirm",
   };
 
   if (s.step in nextStep) {
-    const fieldMap = { askName: "name", askContact: "contact", askExperience: "experience", askState: "state", askCityZip: "cityOrZip", askDriver: "driver" };
+    const fieldMap = {
+      askName: "name",
+      askContact: "contact",
+      askExperience: "experience",
+      askState: "state",
+      askCityZip: "cityOrZip",
+      askDriver: "driver",
+    };
     s[fieldMap[s.step]] = text;
     s.step = nextStep[s.step];
 
