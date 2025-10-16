@@ -1,232 +1,453 @@
+// index.js (emails commented out)
 import TelegramBot from "node-telegram-bot-api";
 import express from "express";
 import dotenv from "dotenv";
 import fs from "fs";
-import nodemailer from "nodemailer";
-
+// import nodemailer from "nodemailer"; // <-- email temporarily disabled
 dotenv.config();
 
 const {
   BOT_TOKEN,
   MANAGER_CHAT_ID,
-  MANAGER_EMAIL,
-  SENDGRID_USER,
-  SENDGRID_PASS,
+  // MANAGER_EMAIL,
+  // GMAIL_USER,
+  // GMAIL_PASS,
   PORT,
 } = process.env;
-
-if (!BOT_TOKEN || !MANAGER_CHAT_ID || !SENDGRID_USER || !SENDGRID_PASS) {
-  throw new Error(
-    "❌ BOT_TOKEN, MANAGER_CHAT_ID, SENDGRID_USER, and SENDGRID_PASS must be set in .env"
-  );
+if (!BOT_TOKEN || !MANAGER_CHAT_ID) {
+  throw new Error("❌ BOT_TOKEN and MANAGER_CHAT_ID must be set in env");
 }
 
-// Create SendGrid transporter
-const transporter = nodemailer.createTransport({
-  host: "smtp.sendgrid.net",
-  port: 587,
-  secure: false, // TLS
-  auth: {
-    user: SENDGRID_USER, // should literally be "apikey"
-    pass: SENDGRID_PASS, // your SendGrid API key
-  },
-});
+// // If you want emails: ensure MANAGER_EMAIL, GMAIL_USER and GMAIL_PASS are set
+// const emailEnabled = !!(MANAGER_EMAIL && GMAIL_USER && GMAIL_PASS);
 
-// Express server
+// // Create nodemailer transporter (Gmail via App Password)
+// let transporter = null;
+// if (emailEnabled) {
+//   transporter = nodemailer.createTransport({
+//     service: "gmail",
+//     auth: {
+//       user: GMAIL_USER,
+//       pass: GMAIL_PASS, // should be an App Password
+//     },
+//   });
+// }
+
+const MANAGER_ID = MANAGER_CHAT_ID;
+const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 const app = express();
-app.use(express.json());
 const SERVER_PORT = PORT || 10000;
 
-// Load vacancies
+// Load vacancies from JSON (ensure file exists)
 let vacancies = [];
 try {
   vacancies = JSON.parse(fs.readFileSync("./vacancies.json", "utf8"));
 } catch (err) {
-  console.warn("⚠️ vacancies.json not found, starting with empty list");
+  console.warn(
+    "Warning: vacancies.json not found or invalid. continuing with empty vacancies."
+  );
 }
 
 // In-memory sessions
 const sessions = {};
 
-// Translations
+// Translations (with full state names)
 const translations = {
   en: {
-    chooseLang: "🌐 Choose your language:",
+    chooseLang: "🌐 Please choose your language:",
     mainMenu: "🏠 Main Menu",
     vacancies: "💼 Vacancies",
     changeLang: "🌐 Change Language",
     back: "⬅️ Back",
     mainMenuBtn: "🏠 Main Menu",
-    askName: "✍️ Enter your full name:",
-    askContact: "📱 Enter your contact (WhatsApp/Telegram with country code):",
-    askExperience: "💼 Select your experience:",
+    askName: "✍️ Please enter your full name:",
+    askContact:
+      "📱 Please enter your contact (WhatsApp/Telegram with country code):",
+    askExperience: "💼 Please select your experience:",
     exp0: "0 years",
     exp1: "1–3 years",
     exp3: "3+ years",
-    askState: "🏙️ Choose your state or type it:",
-    askCityZip: "🏘️ Enter your city or ZIP code:",
+    askState: "🏙️ Please choose your state or type it:",
+    askCityZip: "🏘️ Enter your city or ZIP code (either is fine):",
     askDriver: "🚗 Do you have a driver’s license?",
     yes: "✅ Yes",
     no: "❌ No",
-    confirm: "📋 Confirm your application:",
+    confirm: "📋 Please confirm your application:",
     confirmBtn: "✅ Confirm and Submit",
-    applied: "🎉 Application sent! Check your Telegram for updates.",
-    invalidOption: "⚠️ Please select a valid option.",
+    applied: "🎉 Your application has been sent!\n\nFollow our chanel",
+    invalidOption: "⚠️ Please select an option from the menu.",
+    driverOptions: ["✅ Yes", "❌ No"],
+    NY: "New York",
+    NJ: "New Jersey",
+    PA: "Pennsylvania",
+    DC: "District of Columbia",
   },
-  // You can add 'ru' and 'es' similarly
+  ru: {
+    chooseLang: "🌐 Пожалуйста, выберите язык:",
+    mainMenu: "🏠 Главное меню",
+    vacancies: "💼 Вакансии",
+    changeLang: "🌐 Сменить язык",
+    back: "⬅️ Назад",
+    mainMenuBtn: "🏠 Главное меню",
+    askName: "✍️ Введите ваше полное имя:",
+    askContact: "📱 Введите ваш контакт (WhatsApp/Telegram с кодом страны):",
+    askExperience: "💼 Выберите ваш опыт:",
+    exp0: "0 лет",
+    exp1: "1–3 года",
+    exp3: "3+ лет",
+    askState: "🏙️ Пожалуйста, выберите штат или введите его:",
+    askCityZip: "🏘️ Введите ваш город или ZIP код (подойдет и тот, и другой):",
+    askDriver: "🚗 У вас есть водительское удостоверение?",
+    yes: "✅ Да",
+    no: "❌ Нет",
+    confirm: "📋 Пожалуйста, подтвердите вашу заявку:",
+    confirmBtn: "✅ Подтвердить и отправить",
+    applied: "🎉 Ваша заявка была отправлена!\n\nПодпишитесь на наш канал",
+    invalidOption: "⚠️ Пожалуйста, выберите вариант из меню.",
+    driverOptions: ["✅ Да", "❌ Нет"],
+    NY: "Нью-Йорк",
+    NJ: "Нью-Джерси",
+    PA: "Пенсильвания",
+    DC: "Округ Колумбия",
+  },
+  es: {
+    chooseLang: "🌐 Por favor, elige tu idioma:",
+    mainMenu: "🏠 Menú Principal",
+    vacancies: "💼 Vacantes",
+    changeLang: "🌐 Cambiar idioma",
+    back: "⬅️ Atrás",
+    mainMenuBtn: "🏠 Menú Principal",
+    askName: "✍️ Por favor, escribe tu nombre completo:",
+    askContact:
+      "📱 Por favor, escribe tu contacto (WhatsApp/Telegram con código de país):",
+    askExperience: "💼 Por favor selecciona tu experiencia:",
+    exp0: "0 años",
+    exp1: "1–3 años",
+    exp3: "3+ años",
+    askState: "🏙️ Por favor, elige tu estado o escríbelo:",
+    askCityZip: "🏘️ Escribe tu ciudad o código postal (ambos están bien):",
+    askDriver: "🚗 ¿Tienes licencia de conducir?",
+    yes: "✅ Sí",
+    no: "❌ No",
+    confirm: "📋 Por favor confirma tu aplicación:",
+    confirmBtn: "✅ Confirmar y Enviar",
+    applied: "🎉 ¡Tu aplicación ha sido enviada!",
+    invalidOption: "⚠️ Por favor selecciona una opción del menú.",
+    driverOptions: ["✅ Sí", "❌ No"],
+    NY: "Nueva York",
+    NJ: "Nueva Jersey",
+    PA: "Pensilvania",
+    DC: "Distrito de Columbia",
+  },
 };
 
 const t = (lang, key) => (translations[lang] && translations[lang][key]) || key;
 
 // Keyboards
-const makeKeyboard = (buttons) => ({
-  keyboard: buttons,
+const langKeyboard = {
+  reply_markup: {
+    keyboard: [["English"], ["Русский"], ["Español"]],
+    resize_keyboard: true,
+    one_time_keyboard: true,
+  },
+};
+
+const mainMenuKeyboard = (lang) => ({
+  keyboard: [
+    [t(lang, "vacancies")],
+    [t(lang, "changeLang")],
+  ],
   resize_keyboard: true,
-  one_time_keyboard: true,
 });
-const langKeyboard = makeKeyboard([["English"], ["Русский"], ["Español"]]);
 
-// Telegram Bot
-const bot = new TelegramBot(BOT_TOKEN, { polling: true });
+const backMainKeyboard = (lang) => ({
+  keyboard: [[t(lang, "back"), t(lang, "mainMenuBtn")]],
+  resize_keyboard: true,
+});
 
-// Helper to send email
-async function sendApplicationEmail(data) {
-  const msg = `
-New application:
-🏢 Vacancy: ${data.vacancy}
-✍️ Name: ${data.name}
-📱 Contact: ${data.contact}
-💼 Experience: ${data.experience}
-🏙️ State: ${data.state}
-🏘️ City/ZIP: ${data.cityOrZip}
-🚗 Driver: ${data.driver}`;
+const experienceKeyboard = (lang) => ({
+  keyboard: [
+    [t(lang, "exp0")],
+    [t(lang, "exp1")],
+    [t(lang, "exp3")],
+    [t(lang, "back"), t(lang, "mainMenuBtn")],
+  ],
+  resize_keyboard: true,
+});
 
-  const mailOptions = {
-    from: `"NoReply" <no-reply@example.com>`,
-    to: MANAGER_EMAIL,
-    subject: `New Application — ${data.name}`,
-    text: msg,
-    html: `<pre>${msg.replace(/</g, "&lt;")}</pre>`,
-  };
+const driverKeyboard = (lang) => ({
+  keyboard: [
+    [t(lang, "yes"), t(lang, "no")],
+    [t(lang, "back"), t(lang, "mainMenuBtn")],
+  ],
+  resize_keyboard: true,
+});
 
-  try {
-    const info = await transporter.sendMail(mailOptions);
-    console.log("✅ Email sent:", info.response);
-  } catch (err) {
-    console.error("❌ Failed to send email:", err);
+const stateKeyboard = (lang) => {
+  const rows = [
+    [t(lang, "NY"), t(lang, "NJ")],
+    [t(lang, "PA"), t(lang, "DC")],
+    [t(lang, "back"), t(lang, "mainMenuBtn")],
+  ];
+  return { keyboard: rows, resize_keyboard: true, one_time_keyboard: true };
+};
+
+const vacanciesKeyboard = (lang) => {
+  const keys = (vacancies || []).map((v) => v[lang] || v.en || "Vacancy");
+  const buttons = [];
+  for (let i = 0; i < keys.length; i += 2) {
+    buttons.push(keys.slice(i, i + 2));
   }
-}
+  buttons.push([t(lang, "back"), t(lang, "mainMenuBtn")]);
+  return { keyboard: buttons, resize_keyboard: true };
+};
 
 // Start command
 bot.onText(/\/start/, (msg) => {
   const chatId = msg.chat.id;
   sessions[chatId] = { step: "chooseLang" };
-  bot.sendMessage(chatId, "🌐 Please choose your language:", langKeyboard);
+  bot.sendMessage(
+    chatId,
+    "🌐 Please choose your language / Пожалуйста, выберите язык / Por favor, elige tu idioma:",
+    langKeyboard
+  );
 });
 
 // Message handler
 bot.on("message", async (msg) => {
   const chatId = msg.chat.id;
-  const text = msg.text;
-  if (!sessions[chatId]) sessions[chatId] = { step: "chooseLang" };
-  const s = sessions[chatId];
+  const raw = msg.text;
+  let s = sessions[chatId];
+  console.log(raw);
 
-  // Language selection
+  if (!s) {
+    sessions[chatId] = { step: "chooseLang" };
+    s = sessions[chatId];
+  }
+
   if (s.step === "chooseLang") {
-    if (["English", "Русский", "Español"].includes(text))
-      s.lang = text === "English" ? "en" : text === "Русский" ? "ru" : "es";
-    else return bot.sendMessage(chatId, "⚠️ Please select a language:", langKeyboard);
+    if (raw === "English") s.lang = "en";
+    else if (raw === "Русский") s.lang = "ru";
+    else if (raw === "Español") s.lang = "es";
+    else
+      return bot.sendMessage(
+        chatId,
+        "⚠️ Please select a language / Пожалуйста, выберите язык / Por favor, elige un idioma",
+        langKeyboard
+      );
 
     s.step = "main";
-    return bot.sendMessage(
-      chatId,
-      t(s.lang, "mainMenu"),
-      makeKeyboard([[t(s.lang, "vacancies")], [t(s.lang, "changeLang")]])
-    );
+    return bot.sendMessage(chatId, t(s.lang, "mainMenu"), {
+      reply_markup: mainMenuKeyboard(s.lang),
+    });
   }
 
   const lang = s.lang || "en";
 
-  // Main menu
+  if (raw === t(lang, "mainMenuBtn")) {
+    s.step = "main";
+    return bot.sendMessage(chatId, t(lang, "mainMenu"), {
+      reply_markup: mainMenuKeyboard(lang),
+    });
+  }
+
+  if (raw === t(lang, "back")) {
+    if (s.previousStep) {
+      s.step = s.previousStep;
+      s.previousStep = null;
+      switch (s.step) {
+        case "askContact":
+          return bot.sendMessage(chatId, t(lang, "askContact"), {
+            reply_markup: backMainKeyboard(lang),
+          });
+        case "askExperience":
+          return bot.sendMessage(chatId, t(lang, "askExperience"), {
+            reply_markup: experienceKeyboard(lang),
+          });
+        case "askState":
+          return bot.sendMessage(chatId, t(lang, "askState"), {
+            reply_markup: stateKeyboard(lang),
+          });
+        case "askCityZip":
+          return bot.sendMessage(chatId, t(lang, "askCityZip"), {
+            reply_markup: backMainKeyboard(lang),
+          });
+        case "askDriver":
+          return bot.sendMessage(chatId, t(lang, "askDriver"), {
+            reply_markup: driverKeyboard(lang),
+          });
+      }
+    }
+  }
+
   if (s.step === "main") {
-    if (text === t(lang, "changeLang")) {
+    if (raw === t(lang, "changeLang")) {
       s.step = "chooseLang";
       return bot.sendMessage(chatId, t(lang, "chooseLang"), langKeyboard);
     }
-    if (text === t(lang, "vacancies")) {
+    if (raw === t(lang, "vacancies")) {
       s.step = "chooseVacancy";
-      const buttons = vacancies.map((v) => [v[lang] || v.en || "Vacancy"]);
-      buttons.push([t(lang, "back")]);
-      return bot.sendMessage(chatId, "💼 Choose a vacancy:", makeKeyboard(buttons));
+      return bot.sendMessage(chatId, "💼 Choose a vacancy:", {
+        reply_markup: vacanciesKeyboard(lang),
+      });
     }
   }
 
-  // Vacancy selection
-  if (s.step === "chooseVacancy") {
-    const vac = vacancies.find((v) => v[lang] === text || v.en === text);
-    if (!vac) return bot.sendMessage(chatId, t(lang, "invalidOption"));
-    s.vacancy = vac[lang] || vac.en;
-    s.step = "askName";
-    return bot.sendMessage(chatId, t(lang, "askName"), makeKeyboard([[t(lang, "back")]]));
-  }
+  switch (s.step) {
+    case "chooseVacancy": {
+      const validVac = (vacancies || []).find(
+        (v) => v[lang] === raw || v.en === raw
+      );
+      if (!validVac)
+        return bot.sendMessage(chatId, t(lang, "invalidOption"), {
+          reply_markup: vacanciesKeyboard(lang),
+        });
+      s.vacancy = validVac;
+      s.previousStep = "chooseVacancy";
+      s.step = "askName";
+      return bot.sendMessage(chatId, t(lang, "askName"), {
+        reply_markup: backMainKeyboard(lang),
+      });
+    }
 
-  // Collect info
-  const nextStep = {
-    askName: "askContact",
-    askContact: "askExperience",
-    askExperience: "askState",
-    askState: "askCityZip",
-    askCityZip: "askDriver",
-    askDriver: "confirm",
-  };
+    case "askName": {
+      s.name = raw;
+      s.previousStep = "askName";
+      s.step = "askContact";
+      return bot.sendMessage(chatId, t(lang, "askContact"), {
+        reply_markup: backMainKeyboard(lang),
+      });
+    }
 
-  if (s.step in nextStep) {
-    const fieldMap = {
-      askName: "name",
-      askContact: "contact",
-      askExperience: "experience",
-      askState: "state",
-      askCityZip: "cityOrZip",
-      askDriver: "driver",
-    };
-    s[fieldMap[s.step]] = text;
-    s.step = nextStep[s.step];
+    case "askContact": {
+      s.contact = raw;
+      s.previousStep = "askContact";
+      s.step = "askExperience";
+      return bot.sendMessage(chatId, t(lang, "askExperience"), {
+        reply_markup: experienceKeyboard(lang),
+      });
+    }
 
-    if (s.step === "confirm") {
-      const summary = `📋 ${t(lang, "confirm")}
-🏢 Vacancy: ${s.vacancy}
+    case "askExperience": {
+      if (![t(lang, "exp0"), t(lang, "exp1"), t(lang, "exp3")].includes(raw))
+        return bot.sendMessage(chatId, t(lang, "invalidOption"), {
+          reply_markup: experienceKeyboard(lang),
+        });
+      s.experience = raw;
+      s.previousStep = "askExperience";
+      s.step = "askState";
+      return bot.sendMessage(chatId, t(lang, "askState"), {
+        reply_markup: stateKeyboard(lang),
+      });
+    }
+
+    case "askState": {
+      s.state = raw;
+      s.previousStep = "askState";
+      s.step = "askCityZip";
+      return bot.sendMessage(chatId, t(lang, "askCityZip"), {
+        reply_markup: backMainKeyboard(lang),
+      });
+    }
+
+    case "askCityZip": {
+      s.cityOrZip = raw;
+      s.previousStep = "askCityZip";
+      s.step = "askDriver";
+      return bot.sendMessage(chatId, t(lang, "askDriver"), {
+        reply_markup: driverKeyboard(lang),
+      });
+    }
+
+    case "askDriver": {
+      if (!t(lang, "driverOptions").includes(raw))
+        return bot.sendMessage(chatId, t(lang, "invalidOption"), {
+          reply_markup: driverKeyboard(lang),
+        });
+      s.driver = raw;
+      s.previousStep = "askDriver";
+      s.step = "confirm";
+      const vacancyLabel = s.vacancy
+        ? s.vacancy[lang] || s.vacancy.en || "Vacancy"
+        : "—";
+      const summary = `${t(lang, "confirm")}
+🏢 Vacancy: ${vacancyLabel}
 ✍️ Name: ${s.name}
 📱 Contact: ${s.contact}
 💼 Experience: ${s.experience}
 🏙️ State: ${s.state}
 🏘️ City/ZIP: ${s.cityOrZip}
 🚗 Driver: ${s.driver}`;
-      await bot.sendMessage(chatId, summary, makeKeyboard([[t(lang, "confirmBtn")], [t(lang, "back")]]));
-    } else {
-      const askKey = s.step;
-      await bot.sendMessage(chatId, t(lang, askKey), makeKeyboard([[t(lang, "back")]]));
+      return bot.sendMessage(chatId, summary, {
+        reply_markup: {
+          keyboard: [
+            [t(lang, "confirmBtn")],
+            [t(lang, "back"), t(lang, "mainMenuBtn")],
+          ],
+          resize_keyboard: true,
+        },
+      });
     }
-    return;
-  }
 
-  // Confirm submission
-  if (s.step === "confirm" && text === t(lang, "confirmBtn")) {
-    // Send to Telegram manager
-    await bot.sendMessage(MANAGER_CHAT_ID, `New application:\n${JSON.stringify(s, null, 2)}`);
-    // Send email
-    await sendApplicationEmail(s);
-    await bot.sendMessage(chatId, t(lang, "applied"));
-    s.step = "main";
-    return;
-  }
+    case "confirm": {
+      if (raw !== t(lang, "confirmBtn"))
+        return bot.sendMessage(chatId, t(lang, "invalidOption"));
+      const vacancyLabel = s.vacancy
+        ? s.vacancy[lang] || s.vacancy.en || "Vacancy"
+        : "—";
+      const managerMsg = `New application:
+🏢 Vacancy: ${vacancyLabel}
+✍️ Name: ${s.name}
+📱 Contact: ${s.contact}
+💼 Experience: ${s.experience}
+🏙️ State: ${s.state}
+🏘️ City/ZIP: ${s.cityOrZip}
+🏷️ ZIP (if provided): ${s.cityOrZip}
+🚗 Driver: ${s.driver}`;
 
-  // Back button
-  if (text === t(lang, "back")) {
-    s.step = "main";
-    return bot.sendMessage(chatId, t(lang, "mainMenu"), makeKeyboard([[t(lang, "vacancies")], [t(lang, "changeLang")]]));
+      // Send to Telegram manager (existing behavior)
+      await bot.sendMessage(MANAGER_ID, managerMsg);
+
+      // // Send email to manager (optional, if configured)
+      // if (emailEnabled && transporter) {
+      //   try {
+      //     const mailOptions = {
+      //       from: `"NoReply" <${GMAIL_USER}>`,
+      //       to: MANAGER_EMAIL,
+      //       subject: `New Application — ${s.name}`,
+      //       text: managerMsg,
+      //       html: `<pre>${managerMsg.replace(/</g, "&lt;")}</pre>`,
+      //     };
+      //     await transporter.sendMail(mailOptions);
+      //     console.log("Email sent to manager");
+      //   } catch (err) {
+      //     console.error("Failed to send email:", err);
+      //   }
+      // }
+
+      const CHANNEL_LINK = ""; // <- add your channel link here
+      const finalMsg = `${t(lang, "applied")}
+${CHANNEL_LINK ? `\n🔔 Join our channel for updates: ${CHANNEL_LINK}` : ""}`;
+
+      await bot.sendMessage(chatId, finalMsg, {
+        reply_markup: mainMenuKeyboard(lang),
+      });
+
+      s.step = "main";
+      s.previousStep = null;
+      return;
+    }
   }
 });
 
-// Express route
 app.get("/", (req, res) => res.send("🤖 Bot is running..."));
-app.listen(SERVER_PORT, () => console.log(`🌐 Server running on ${SERVER_PORT}`));
+app.listen(SERVER_PORT, () =>
+  console.log(`🌐 Server running on ${SERVER_PORT}`)
+);
+
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught Exception:", err);
+});
+process.on("unhandledRejection", (err) => {
+  console.error("Unhandled Rejection:", err);
+});
