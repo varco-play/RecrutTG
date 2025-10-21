@@ -19,7 +19,7 @@ const {
 if (!BOT_TOKEN || !MANAGER_CHAT_ID || !SENDPULSE_USER || !SENDPULSE_PASS) {
   throw new Error("❌ Missing environment variables in .env file");
 }
-
+ 
 // --- Telegram bot setup ---
 const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
